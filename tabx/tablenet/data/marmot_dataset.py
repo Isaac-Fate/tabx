@@ -28,15 +28,19 @@ SplitResult = namedtuple(
 
 class MarmotDataset(Dataset):
 
-    def __init__(
-        self,
-        marmot_dataset_dir: Path | str,
-        table_masks_dir: Path | str,
-        column_masks_dir: Path | str,
-    ) -> None:
+    def __init__(self, marmot_dataset_dir: Path | str) -> None:
 
         # Init super class
         super().__init__()
+
+        # Convert to path
+        marmot_dataset_dir = Path(marmot_dataset_dir)
+
+        # Table masks dir
+        table_masks_dir = marmot_dataset_dir.joinpath("table-masks")
+
+        # Column masks dir
+        column_masks_dir = marmot_dataset_dir.joinpath("column-masks")
 
         # File paths of all data items
         self._item_filepaths: list[MarmotDatasetItem] = []
@@ -49,7 +53,7 @@ class MarmotDataset(Dataset):
         self._valid_indices: Optional[tuple[int]] = None
         self._test_indices: Optional[tuple[int]] = None
 
-        for index, xml_filepath in enumerate(Path(marmot_dataset_dir).glob("*.xml")):
+        for index, xml_filepath in enumerate(marmot_dataset_dir.glob("*.xml")):
 
             # Item name
             item_name = xml_filepath.stem
@@ -63,18 +67,16 @@ class MarmotDataset(Dataset):
             """
 
             # Image file path
-            image_filepath = Path(
-                str(Path(marmot_dataset_dir).joinpath(item_name)) + ".bmp"
-            )
+            image_filepath = Path(str(marmot_dataset_dir.joinpath(item_name)) + ".bmp")
 
             # Associated table mask image file path
             table_mask_filepath = Path(
-                str(Path(table_masks_dir).joinpath(item_name)) + ".jpg"
+                str(table_masks_dir.joinpath(item_name)) + ".jpg"
             )
 
             # Associated column mask image file path
             column_mask_filepath = Path(
-                str(Path(column_masks_dir).joinpath(item_name)) + ".jpg"
+                str(column_masks_dir.joinpath(item_name)) + ".jpg"
             )
 
             # Add to paths

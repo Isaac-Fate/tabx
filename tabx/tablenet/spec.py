@@ -7,3 +7,4 @@ class TableNetSpec(BaseModel, ABC):
 
     input_image_width: ClassVar[int] = 1024
     input_image_height: ClassVar[int] = 1024
+    n_output_channels: ClassVar[int] = 1
