@@ -5,12 +5,16 @@ description = ""
 authors = ["isaac-fei <isaac.omega.fei@gmail.com>"]
 readme = "README.md"
 
+[tool.poetry.scripts]
+tabx = 'tabx:app'
+
 [tool.poetry.dependencies]
 python = "^3.11"
 torch = "^2.2.0"
 torchvision = "^0.17.0"
 pydantic = "^2.6.1"
 loguru = "^0.7.2"
+typer = { extras = ["all"], version = "^0.9.0" }
 
 
 [tool.poetry.group.dev.dependencies]

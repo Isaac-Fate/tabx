@@ -1,10 +1,8 @@
 from typing import Self, Optional
 import tomllib
 from pathlib import Path
-from pydantic import BaseModel
 
 import torch
-from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
@@ -32,10 +30,10 @@ class Trainer:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Data
-        self._dataset = Optional[MarmotDataset] = None
-        self._train_dataloader = Optional[DataLoader] = None
-        self._valid_dataloader = Optional[DataLoader] = None
-        self._test_dataloader = Optional[DataLoader] = None
+        self._dataset: Optional[MarmotDataset] = None
+        self._train_dataloader: Optional[DataLoader] = None
+        self._valid_dataloader: Optional[DataLoader] = None
+        self._test_dataloader: Optional[DataLoader] = None
 
         # Create table net model
         self._model = TableNet()
@@ -56,9 +54,15 @@ class Trainer:
     @classmethod
     def from_config_file(cls, filepath: Path | str) -> Self:
 
+        # Get the run dir
+        run_dir = filepath.parent
+
         # Read the configuration file
         with open(filepath, "rb") as fp:
             data = tomllib.load(fp)
+
+        # Set run dir
+        data["run_dir"] = run_dir
 
         # Convert to TrainingConfig
         config = TrainingConfig.model_validate(data)
@@ -73,7 +77,7 @@ class Trainer:
         # Create a run
         run = wandb.init(
             # Project name
-            project="Table Net",
+            project="table-net",
             # Run name
             name=self._config.run_name,
         )
@@ -88,7 +92,8 @@ class Trainer:
         )
 
         # Log
-        logger.info("Start training...")
+        self._logger.info("Start training...")
+        self._logger.info(f"Training Configuration: {self._config}")
 
         # Training loop
         for i in range(self._config.n_epochs):
@@ -147,7 +152,10 @@ class Trainer:
             # Validate
             self._validate(epoch)
 
-    def _prepare_data(self):
+            # Save checkpoint
+            self._save_checkpoint(epoch)
+
+    def _prepare_data(self) -> None:
 
         # Load dataset
         dataset = MarmotDataset(self._config.dataset_dir)
@@ -175,12 +183,13 @@ class Trainer:
         self._valid_dataloader = valid_dataloader
         self._test_dataloader = test_dataloader
 
-    def _validate(self, epoch: int):
+    def _validate(self, epoch: int) -> None:
         with torch.no_grad():
             # List of loss of each batch
             valid_losses = []
 
             # Validation loop
+            n_batches = len(self._valid_dataloader)
             for item in self._valid_dataloader:
                 # Unpack item
                 image = item.image
@@ -198,10 +207,10 @@ class Trainer:
                 valid_dice_loss = (table_loss + column_loss) / 2
 
                 # Add to list
-                valid_losses.append(valid_dice_loss)
+                valid_losses.append(valid_dice_loss.item())
 
             # Overall validation performance
-            valid_loss = torch.mean(valid_losses).item()
+            valid_loss = sum(valid_losses) / n_batches
 
             # Log
 
@@ -216,3 +225,26 @@ class Trainer:
 
             # Wandb
             wandb.log(valid_log_record.model_dump())
+
+    def _save_checkpoint(self, epoch: int) -> None:
+
+        # No need to save
+        if (
+            epoch % self._config.save_every_n_epochs != 0
+            and epoch != self._config.n_epochs
+        ):
+            return
+
+        # State dict
+        state_dict = self._model.state_dict()
+
+        # File path
+        checkpoint_filepath = self._config.checkpoints_dir.joinpath(
+            f"checkpoint-{epoch}"
+        ).with_suffix(".pt")
+
+        # Save
+        torch.save(state_dict, checkpoint_filepath)
+
+        # Log
+        self._logger.info(f"Checkpoint is saved at: {checkpoint_filepath}")
