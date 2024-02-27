@@ -107,6 +107,9 @@ class Trainer:
                 # Batch number
                 batch = i + 1
 
+                # Zero the gradients
+                optimizer.zero_grad()
+
                 # Unpack item, and
                 # move data to device
                 image = item.image.to(self._device)
@@ -123,9 +126,6 @@ class Trainer:
 
                 # Overall loss
                 loss = (table_loss + column_loss) / 2
-
-                # Zero the gradients
-                optimizer.zero_grad()
 
                 # Backward pass
                 loss.backward()
