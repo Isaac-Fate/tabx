@@ -110,8 +110,8 @@ class Trainer:
                 # Unpack item, and
                 # move data to device
                 image = item.image.to(self._device)
-                table_mask = item.table_mask.to(self._device)
-                column_mask = item.column_mask.to(self._device)
+                table_mask = item.table_mask
+                column_mask = item.column_mask
 
                 # Forward pass
                 # Get both prdicted table and column masks
@@ -193,8 +193,8 @@ class Trainer:
             for item in self._valid_dataloader:
                 # Unpack item
                 image = item.image
-                table_mask = item.table_mask.to(self._device)
-                column_mask = item.column_mask.to(self._device)
+                table_mask = item.table_mask
+                column_mask = item.column_mask
 
                 # Get both prdicted table and column masks
                 mask: Mask = self._model(image)
