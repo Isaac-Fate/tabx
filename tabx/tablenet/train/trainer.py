@@ -157,28 +157,17 @@ class Trainer:
 
     def _prepare_data(self) -> None:
 
-        # Load dataset
-        dataset = MarmotDataset(self._config.dataset_dir)
-
-        # Split the dataset
-        train_dataset, valid_dataset, test_dataset = dataset.split(
-            train=self._config.train_ratio,
-            valid=self._config.valid_ratio,
-            test=self._config.test_ratio,
-        )
+        # Load datasets
+        data_subsets_dir = self._config.data_subsets_dir
+        train_dataset = MarmotDataset(data_subsets_dir.joinpath("train"))
+        valid_dataset = MarmotDataset(data_subsets_dir.joinpath("valid"))
+        test_dataset = MarmotDataset(data_subsets_dir.joinpath("test"))
 
         # Create data loaders
         train_dataloader = DataLoader(train_dataset, batch_size=self._config.batch_size)
         valid_dataloader = DataLoader(valid_dataset, batch_size=self._config.batch_size)
         test_dataloader = DataLoader(test_dataset, batch_size=self._config.batch_size)
 
-        # Log
-        self._logger.info("Done preparing data")
-        self._logger.info(f"Training item names: {dataset.train_item_names}")
-        self._logger.info(f"Validation item names: {dataset.valid_item_names}")
-        self._logger.info(f"Test item names: {dataset.test_item_names}")
-
-        self._dataset = dataset
         self._train_dataloader = train_dataloader
         self._valid_dataloader = valid_dataloader
         self._test_dataloader = test_dataloader

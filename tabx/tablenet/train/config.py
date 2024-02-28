@@ -8,13 +8,8 @@ class TrainingConfig(BaseModel):
     # which stores the log file and all checkpoints
     run_dir: Path
 
-    # Directory of the Marmot dataset
-    dataset_dir: Path
-
-    # Proportions of taining, validation and test datasets
-    train_ratio: float
-    valid_ratio: float
-    test_ratio: float
+    # Root directory of the data subsets
+    data_subsets_dir: Path
 
     # Batch size
     batch_size: int

@@ -1,5 +1,6 @@
 from typing import Optional
 from collections import namedtuple
+import shutil
 from PIL import Image
 from pathlib import Path
 from torch.utils.data import Dataset, random_split
@@ -26,7 +27,7 @@ SplitResult = namedtuple(
 )
 
 
-class MarmotDataset(Dataset):
+class MarmotDatasetSplitter(Dataset):
 
     def __init__(self, marmot_dataset_dir: Path | str) -> None:
 
@@ -35,6 +36,7 @@ class MarmotDataset(Dataset):
 
         # Convert to path
         marmot_dataset_dir = Path(marmot_dataset_dir)
+        self._dataset_dir = marmot_dataset_dir
 
         # Table masks dir
         table_masks_dir = marmot_dataset_dir.joinpath("table-masks")
@@ -46,7 +48,7 @@ class MarmotDataset(Dataset):
         self._item_filepaths: list[MarmotDatasetItem] = []
 
         # A dict that maps the index of the name of each data item
-        self._index_to_item_name: dict[int, str] = {}
+        self._index_to_sample_name: dict[int, str] = {}
 
         # Indices of the training, validation, test datasets
         self._train_indices: Optional[tuple[int]] = None
@@ -56,10 +58,10 @@ class MarmotDataset(Dataset):
         for index, xml_filepath in enumerate(marmot_dataset_dir.glob("*.xml")):
 
             # Item name
-            item_name = xml_filepath.stem
+            sample_name = xml_filepath.stem
 
             # Add to dict
-            self._index_to_item_name[index] = item_name
+            self._index_to_sample_name[index] = sample_name
 
             """To be fair, The naming of Marmot dataset is pretty BAD!
             For example, 10.1.1.1.2006_3.bmp includes the dot "." in its path,
@@ -67,16 +69,18 @@ class MarmotDataset(Dataset):
             """
 
             # Image file path
-            image_filepath = Path(str(marmot_dataset_dir.joinpath(item_name)) + ".bmp")
+            image_filepath = Path(
+                str(marmot_dataset_dir.joinpath(sample_name)) + ".bmp"
+            )
 
             # Associated table mask image file path
             table_mask_filepath = Path(
-                str(table_masks_dir.joinpath(item_name)) + ".jpg"
+                str(table_masks_dir.joinpath(sample_name)) + ".jpg"
             )
 
             # Associated column mask image file path
             column_mask_filepath = Path(
-                str(column_masks_dir.joinpath(item_name)) + ".jpg"
+                str(column_masks_dir.joinpath(sample_name)) + ".jpg"
             )
 
             # Add to paths
@@ -145,7 +149,7 @@ class MarmotDataset(Dataset):
         return self._test_indices
 
     @property
-    def train_item_names(self) -> Optional[tuple]:
+    def train_sample_names(self) -> Optional[tuple]:
         """Names of items in training dataset."""
 
         if self._train_indices is None:
@@ -153,13 +157,13 @@ class MarmotDataset(Dataset):
 
         return tuple(
             map(
-                lambda index: self._index_to_item_name[index],
+                lambda index: self._index_to_sample_name[index],
                 self._train_indices,
             )
         )
 
     @property
-    def valid_item_names(self) -> Optional[tuple]:
+    def valid_sample_names(self) -> Optional[tuple]:
         """Names of items in validation dataset."""
 
         if self._valid_indices is None:
@@ -167,13 +171,13 @@ class MarmotDataset(Dataset):
 
         return tuple(
             map(
-                lambda index: self._index_to_item_name[index],
+                lambda index: self._index_to_sample_name[index],
                 self._valid_indices,
             )
         )
 
     @property
-    def test_item_names(self) -> Optional[tuple]:
+    def test_sample_names(self) -> Optional[tuple]:
         """Names of items in test dataset."""
 
         if self._test_indices is None:
@@ -181,7 +185,7 @@ class MarmotDataset(Dataset):
 
         return tuple(
             map(
-                lambda index: self._index_to_item_name[index],
+                lambda index: self._index_to_sample_name[index],
                 self._test_indices,
             )
         )
@@ -192,6 +196,7 @@ class MarmotDataset(Dataset):
         train: float,
         valid: float = 0.0,
         test: float = 0.0,
+        data_subsets_dir: Optional[Path] = None
     ) -> SplitResult:
         """Split the dataset into training, validation and test datasets.
         The proportion of training data set must be positive.
@@ -206,6 +211,9 @@ class MarmotDataset(Dataset):
             Proportion of the validation dataset, by default 0.0
         test : float, optional
             Proportion of the test dataset, by default 0.0
+        data_subsets_dir : Optional[Path], optional
+            If this is set, then data subsets will be created under
+            the provided directory.
 
         Returns
         -------
@@ -260,8 +268,97 @@ class MarmotDataset(Dataset):
             self._valid_indices = tuple(valid_dataset.indices)
             self._test_indices = tuple(test_dataset.indices)
 
+        # Create data subsets
+        if data_subsets_dir is not None:
+            self.create_data_subsets(data_subsets_dir)
+
         return SplitResult(
             train=train_dataset,
             valid=valid_dataset,
             test=test_dataset,
         )
+
+    def create_data_subsets(
+        self,
+        data_subsets_dir: Path,
+    ) -> None:
+
+        if not data_subsets_dir.is_dir():
+            data_subsets_dir.mkdir()
+
+        if self.train_sample_names is not None:
+            train_dataset_dir = data_subsets_dir.joinpath("train")
+            if not train_dataset_dir.is_dir():
+                train_dataset_dir.mkdir()
+            self._create_data_subset(
+                train_dataset_dir,
+                sample_names=self.train_sample_names,
+            )
+
+        if self.valid_sample_names is not None:
+            valid_dataset_dir = data_subsets_dir.joinpath("valid")
+            if not valid_dataset_dir.is_dir():
+                valid_dataset_dir.mkdir()
+            self._create_data_subset(
+                valid_dataset_dir,
+                sample_names=self.valid_sample_names,
+            )
+
+        if self.test_sample_names is not None:
+            test_dataset_dir = data_subsets_dir.joinpath("test")
+            if not test_dataset_dir.is_dir():
+                test_dataset_dir.mkdir()
+            self._create_data_subset(
+                test_dataset_dir,
+                sample_names=self.test_sample_names,
+            )
+
+    def _create_data_subset(
+        self,
+        data_subset_dir: Path,
+        sample_names: tuple[str],
+    ) -> None:
+
+        # Create the dir if it does not exist
+        if not data_subset_dir.is_dir():
+            data_subset_dir.mkdir()
+
+        # Images dir
+        images_dir = data_subset_dir.joinpath("images")
+        if not images_dir.is_dir():
+            images_dir.mkdir()
+
+        # Copy images
+        for sample_name in sample_names:
+            shutil.copy(
+                self._dataset_dir.joinpath(sample_name + ".bmp"),
+                images_dir.joinpath(sample_name + ".bmp"),
+            )
+
+        # Table masks dir
+        table_masks_dir = data_subset_dir.joinpath("table-masks")
+        if not table_masks_dir.is_dir():
+            table_masks_dir.mkdir()
+
+        # Copy table masks
+        for sample_name in sample_names:
+            shutil.copy(
+                self._dataset_dir.joinpath("table-masks").joinpath(
+                    sample_name + ".jpg"
+                ),
+                table_masks_dir.joinpath(sample_name + ".jpg"),
+            )
+
+        # Column masks dir
+        column_masks_dir = data_subset_dir.joinpath("column-masks")
+        if not column_masks_dir.is_dir():
+            column_masks_dir.mkdir()
+
+        # Copy column masks
+        for sample_name in sample_names:
+            shutil.copy(
+                self._dataset_dir.joinpath("column-masks").joinpath(
+                    sample_name + ".jpg"
+                ),
+                column_masks_dir.joinpath(sample_name + ".jpg"),
+            )

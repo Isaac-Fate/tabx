@@ -30,5 +30,8 @@
 /experiments
 /runs
 
+# Checkpoints
+/checkpoints
+
 # Wandb
 /wandb
